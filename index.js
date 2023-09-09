@@ -2,7 +2,6 @@ const express = require("express");
 const mongoose = require("mongoose");
 const app = express();
 const userDb = require("./user");
-const passport = require("passport");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const saltRounds = 10;
@@ -23,8 +22,6 @@ app.use((req, res, next) => {
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-app.use(passport.initialize());
-
 app.post("/", (req, res, next) => {
   req.status(200).send("hello");
   console.log("hello");
@@ -35,14 +32,14 @@ app.post("/login", async (req, res, next) => {
     const { password, username } = req.body;
     const existingUser = await userDb.findOne({ username }).lean();
     if (!existingUser) {
-      return res.status(401).json({ error: "User does not exist" });
+      return res.status(401).json({ message: "User does not exist" });
     }
     let isMatch;
     try {
       isMatch = await bcrypt.compare(password, existingUser.password);
     } catch (error) {
       res.json({
-        error: "Something went wrong",
+        message: "Something went wrong",
       });
     }
 
@@ -55,7 +52,7 @@ app.post("/login", async (req, res, next) => {
         "qwertyuiopqwertyuiopqwertyuiopqwertyuiop",
         { expiresIn: 7 * 24 * 3600 },
         (err, token) => {
-          if (err) console.error({ error: "There is some error in token" });
+          if (err) console.error({ message: "There is some error in token" });
           else {
             return res.json({
               success: true,
@@ -65,23 +62,26 @@ app.post("/login", async (req, res, next) => {
         }
       );
     } else {
-      return res.status(401).json({ error: "Incorrect Password" });
+      return res.status(401).json({ message: "Incorrect Password" });
     }
   } catch (error) {
-    return res.status(401).json({ error: "Something Went Wrong" });
+    return res.status(401).json({ message: "Something Went Wrong" });
   }
 });
 
 app.post("/signup", async (req, res, next) => {
   try {
     const { email, password, username, phonenumber } = req.body;
+    if (!email || !password || !username || !phonenumber) {
+      return res.status(401).json({ message: "missing Credentials" });
+    }
     let existingUser;
     try {
       existingUser = await userDb
         .findOne({ username, email, phonenumber })
         .lean();
     } catch (error) {
-      return res.status(401).json({ error: "Something Went Wrong" });
+      return res.status(401).json({ message: "Something Went Wrong" });
     }
 
     if (existingUser) {
@@ -107,7 +107,7 @@ app.post("/signup", async (req, res, next) => {
           "qwertyuiopqwertyuiopqwertyuiopqwertyuiop",
           { expiresIn: 7 * 24 * 3600 },
           (err, token) => {
-            if (err) console.error({ error: "There is some error in token" });
+            if (err) console.error({ message: "There is some error in token" });
             else {
               return res.json({
                 success: true,
@@ -119,7 +119,7 @@ app.post("/signup", async (req, res, next) => {
       });
     });
   } catch (error) {
-    return res.status(401).json({ error: "Something Went Wrong" });
+    return res.status(401).json({ message: "Something Went Wrong" });
   }
 });
 
@@ -130,10 +130,11 @@ app.post("/reset-password", async (req, res, next) => {
     let existingUser;
     try {
       existingUser = await userDb.findOne({ username, email }).lean();
-      if (!existingUser) return res.status(400).send("No User Exists");
+      if (!existingUser)
+        return res.status(400).send({ message: "No User Exists" });
     } catch (error) {
       console.error(error);
-      res.status(400).send("Something went wrong");
+      res.status(400).send({ message: "Something went wrong" });
     }
 
     let isMatch;
@@ -145,7 +146,7 @@ app.post("/reset-password", async (req, res, next) => {
       });
     }
     if (!isMatch) {
-      return res.status(401).json({ error: "Incorrect Password" });
+      return res.status(401).json({ message: "Incorrect Password" });
     }
 
     bcrypt.genSalt(10, (err, salt) => {
@@ -158,9 +159,7 @@ app.post("/reset-password", async (req, res, next) => {
             { password: hash }
           );
         } catch (error) {
-          return res
-            .status(400)
-            .send({ errorMessage: "Something went wrong!" });
+          return res.status(400).send({ message: "Something went wrong!" });
         }
         res.status(200).send("Success");
       });
@@ -173,9 +172,10 @@ app.post("/reset-password", async (req, res, next) => {
 
 app.post("/logout", async (req, res, next) => {
   try {
-    const { token } = res;
+    const { token } = req.body;
+    const tokenized = token?.split(" ")[1];
     const decode = jwt.verify(
-      token,
+      tokenized,
       "qwertyuiopqwertyuiopqwertyuiopqwertyuiop"
     );
     if (decode) {
@@ -185,12 +185,12 @@ app.post("/logout", async (req, res, next) => {
       });
     } else {
       res.json({
-        error: "Not Authorized",
+        message: "Not Authorized",
         data: "error",
       });
     }
   } catch (error) {
-    return res.status(401).json({ error: "Something Went Wrong" });
+    return res.status(401).json({ message: "Invalid Token" });
   }
 });
 
